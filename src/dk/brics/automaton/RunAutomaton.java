@@ -1,7 +1,7 @@
 /*
  * dk.brics.automaton
  * 
- * Copyright (c) 2001-2017 Anders Moeller
+ * Copyright (c) 2001-2011 Anders Moeller
  * All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
@@ -29,6 +29,8 @@
 
 package dk.brics.automaton;
 
+import dk.brics.exception.RegexStatesExceededException;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InvalidClassException;
@@ -38,6 +40,7 @@ import java.io.OptionalDataException;
 import java.io.OutputStream;
 import java.io.Serializable;
 import java.net.URL;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -58,7 +61,7 @@ public class RunAutomaton implements Serializable {
 	/** 
 	 * Sets alphabet table for optimal run performance. 
 	 */
-	void setAlphabet() {
+	final void setAlphabet() {
 		classmap = new int[Character.MAX_VALUE - Character.MIN_VALUE + 1];
 		int i = 0;
 		for (int j = 0; j <= Character.MAX_VALUE - Character.MIN_VALUE; j++) {
@@ -76,7 +79,7 @@ public class RunAutomaton implements Serializable {
 		StringBuilder b = new StringBuilder();
 		b.append("initial state: ").append(initial).append("\n");
 		for (int i = 0; i < size; i++) {
-			b.append("state ").append(i);
+			b.append("state " + i);
 			if (accept[i])
 				b.append(" [accept]:\n");
 			else
@@ -143,22 +146,16 @@ public class RunAutomaton implements Serializable {
 	private RunAutomaton() {}
 
 	/**
-	 * Constructs a new <code>RunAutomaton</code> from a deterministic
-	 * <code>Automaton</code>. Same as <code>RunAutomaton(a, true)</code>.
-	 * @param a an automaton
-	 */
-	public RunAutomaton(Automaton a) {
-		this(a, true);
-	}
-
-	/**
 	 * Retrieves a serialized <code>RunAutomaton</code> located by a URL.
 	 * @param url URL of serialized automaton
 	 * @exception IOException if input/output related exception occurs
+	 * @exception OptionalDataException if the data is not a serialized object
+	 * @exception InvalidClassException if the class serial number does not match
 	 * @exception ClassCastException if the data is not a serialized <code>RunAutomaton</code>
 	 * @exception ClassNotFoundException if the class of the serialized object cannot be found
 	 */
-	public static RunAutomaton load(URL url) throws IOException, ClassCastException, ClassNotFoundException {
+	public static RunAutomaton load(URL url) throws IOException, OptionalDataException, ClassCastException, 
+													ClassNotFoundException, InvalidClassException {
 		return load(url.openStream());
 	}
 
@@ -166,10 +163,13 @@ public class RunAutomaton implements Serializable {
 	 * Retrieves a serialized <code>RunAutomaton</code> from a stream.
 	 * @param stream input stream with serialized automaton
 	 * @exception IOException if input/output related exception occurs
+	 * @exception OptionalDataException if the data is not a serialized object
+	 * @exception InvalidClassException if the class serial number does not match
 	 * @exception ClassCastException if the data is not a serialized <code>RunAutomaton</code>
 	 * @exception ClassNotFoundException if the class of the serialized object cannot be found
 	 */
-	public static RunAutomaton load(InputStream stream) throws IOException, ClassCastException, ClassNotFoundException {
+	public static RunAutomaton load(InputStream stream) throws IOException, OptionalDataException, ClassCastException, 
+															   ClassNotFoundException, InvalidClassException {
 		ObjectInputStream s = new ObjectInputStream(stream);
 		return (RunAutomaton) s.readObject();
 	}
@@ -193,10 +193,12 @@ public class RunAutomaton implements Serializable {
 	 * @param tableize if true, a transition table is created which makes the <code>run</code> 
 	 *                 method faster in return of a higher memory usage
 	 */
-	public RunAutomaton(Automaton a, boolean tableize) {
+	private RunAutomaton(Automaton a, boolean tableize) {
+		// Number of states before calling determinize
 		a.determinize();
 		points = a.getStartPoints();
 		Set<State> states = a.getStates();
+		//Final number of states
 		Automaton.setStateNumbers(states);
 		initial = a.initial.number;
 		size = states.size();
@@ -215,6 +217,25 @@ public class RunAutomaton implements Serializable {
 		}
 		if (tableize)
 			setAlphabet();
+	}
+
+	/**
+	 * Constructs a new <code>Optional.RunAutomaton</code> from a deterministic
+	 * <code>Automaton</code>. Same as <code>RunAutomaton(a, true)</code>.
+	 * @param a an automaton
+	 */
+	public static Optional<RunAutomaton> buildRunner(Automaton a) {
+		return buildRunner(a, true);
+	}
+
+	public static Optional<RunAutomaton> buildRunner(Automaton a, boolean tabelize) {
+		RunAutomaton run;
+		try {
+			run = new RunAutomaton(a, tabelize);
+		} catch (RegexStatesExceededException e) {
+			return Optional.empty();
+		}
+		return Optional.of(run);
 	}
 
 	/**

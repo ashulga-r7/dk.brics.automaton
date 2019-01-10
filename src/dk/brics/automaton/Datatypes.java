@@ -1,7 +1,7 @@
 /*
  * dk.brics.automaton
  * 
- * Copyright (c) 2001-2017 Anders Moeller
+ * Copyright (c) 2001-2011 Anders Moeller
  * All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
@@ -221,7 +221,9 @@ final public class Datatypes {
 	
 	static {
 		automata = new HashMap<String,Automaton>();
-		ws = Automaton.minimize(Automaton.makeCharSet(" \t\n\r").repeat());
+		Automaton a = Automaton.makeCharSet(" \t\n\r").repeat();
+		a.setMaxStatesLimit(Integer.MAX_VALUE);
+		ws = Automaton.minimize(a);
 		unicodeblock_names = new HashSet<String>(Arrays.asList(unicodeblock_names_array));
 		unicodecategory_names = new HashSet<String>(Arrays.asList(unicodecategory_names_array));
 		xml_names = new HashSet<String>(Arrays.asList(xml_names_array));
@@ -258,7 +260,7 @@ final public class Datatypes {
 	 * <tr><td><tt>Char</tt></td><td><a target="_top" href="http://www.w3.org/TR/REC-xml/#NT-Char">Char</a> from XML 1.0</td></tr>
 	 * <tr><td><tt>NameChar</tt></td><td><a target="_top" href="http://www.w3.org/TR/REC-xml/#NT-NameChar">NameChar</a> from XML 1.0</td></tr>
 	 * <tr><td><tt>URI</tt></td><td><a target="_top" href="http://rfc.net/rfc2396.html#sA%2e">URI</a> from RFC2396 with
-	 * amendments from <a target="_top" href="http://www.faqs.org/rfcs/rfc2373.html">RFC2373</a></td></tr>
+	 * amendments from <a target="_top" href="http://www.faqs.org/rfcs/rfc2373.html">RFC2373</td></tr>
 	 * <tr><td><tt>anyname</tt></td><td>optional URI enclosed by brackets, followed by NCName</td></tr>
 	 * <tr><td><tt>noap</tt></td><td>strings not containing '@' and '%'</td></tr>
 	 * <tr><td><tt>whitespace</tt></td><td>optional <a target="_top" href="http://www.w3.org/TR/REC-xml/#NT-S">S</a> from XML 1.0</td></tr>
@@ -457,7 +459,6 @@ final public class Datatypes {
 	 */
 	public static boolean exists(String name) {
 		try {
-			//noinspection ConstantConditions
 			Datatypes.class.getClassLoader().getResource(name + ".aut").openStream().close();
 		} catch (IOException e) {
 			return false;
@@ -468,7 +469,6 @@ final public class Datatypes {
 	private static Automaton load(String name) {
 		try {
 			URL url = Datatypes.class.getClassLoader().getResource(name + ".aut");
-			//noinspection ConstantConditions
 			return Automaton.load(url.openStream());
 		} catch (IOException e) {
 			e.printStackTrace();
@@ -482,7 +482,7 @@ final public class Datatypes {
 	private static void store(String name, Automaton a) {
 		String dir = System.getProperty("dk.brics.automaton.datatypes");
 		if (dir == null)
-			dir = "build";
+			dir = "target/classes";
 		try {
 			a.store((new FileOutputStream(dir + "/" + name + ".aut")));
 		} catch (IOException e) {
@@ -605,9 +605,11 @@ final public class Datatypes {
 		};
 		System.out.println("Building URI automaton...");
 		putFrom("URI", buildMap(uriexps));
-		put(automata, "anyname", Automaton.minimize(Automaton.makeChar('{').concatenate(automata.get("URI").clone()).concatenate(Automaton.makeChar('}')).optional().concatenate(automata.get("NCName").clone())));
+		Automaton b = Automaton.makeChar('{').concatenate(automata.get("URI").clone()).concatenate(Automaton.makeChar('}')).optional().concatenate(automata.get("NCName").clone());
+		b.setMaxStatesLimit(Integer.MAX_VALUE);
+		put(automata, "anyname", Automaton.minimize(b));
 
-		put(automata, "noap", new RegExp("~(@[@%]@)").toAutomaton());
+		put(automata, "noap", new RegExp("~(@[@%]@)").toAutomaton().get());
 		
 		String[] xsdmisc = {
 				"_", "[ \t\n\r]*",
@@ -650,18 +652,18 @@ final public class Datatypes {
 		Map<String,Automaton> m = buildMap(xsdmisc);
 		putWith(xsdexps, m);
 		
-		put(m, "UNSIGNEDLONG", Automaton.makeMaxInteger("18446744073709551615"));
-		put(m, "UNSIGNEDINT", Automaton.makeMaxInteger("4294967295"));
-		put(m, "UNSIGNEDSHORT", Automaton.makeMaxInteger("65535"));
-		put(m, "UNSIGNEDBYTE", Automaton.makeMaxInteger("255"));
-		put(m, "LONG", Automaton.makeMaxInteger("9223372036854775807"));
-		put(m, "LONG_NEG", Automaton.makeMaxInteger("9223372036854775808"));
-		put(m, "INT", Automaton.makeMaxInteger("2147483647"));
-		put(m, "INT_NEG", Automaton.makeMaxInteger("2147483648"));
-		put(m, "SHORT", Automaton.makeMaxInteger("32767"));
-		put(m, "SHORT_NEG", Automaton.makeMaxInteger("32768"));
-		put(m, "BYTE", Automaton.makeMaxInteger("127"));
-		put(m, "BYTE_NEG", Automaton.makeMaxInteger("128"));
+		put(m, "UNSIGNEDLONG", Automaton.makeMaxInteger("18446744073709551615").get());
+		put(m, "UNSIGNEDINT", Automaton.makeMaxInteger("4294967295").get());
+		put(m, "UNSIGNEDSHORT", Automaton.makeMaxInteger("65535").get());
+		put(m, "UNSIGNEDBYTE", Automaton.makeMaxInteger("255").get());
+		put(m, "LONG", Automaton.makeMaxInteger("9223372036854775807").get());
+		put(m, "LONG_NEG", Automaton.makeMaxInteger("9223372036854775808").get());
+		put(m, "INT", Automaton.makeMaxInteger("2147483647").get());
+		put(m, "INT_NEG", Automaton.makeMaxInteger("2147483648").get());
+		put(m, "SHORT", Automaton.makeMaxInteger("32767").get());
+		put(m, "SHORT_NEG", Automaton.makeMaxInteger("32768").get());
+		put(m, "BYTE", Automaton.makeMaxInteger("127").get());
+		put(m, "BYTE_NEG", Automaton.makeMaxInteger("128").get());
 		
 		Map<String,Automaton> u = new HashMap<String,Automaton>();
 		u.putAll(t);
@@ -830,16 +832,22 @@ final public class Datatypes {
 			for (Integer cp : me.getValue()) {
 				la1.add(makeCodePoint(cp));
 				if (la1.size() == 50) {
-					la2.add(Automaton.minimize(Automaton.union(la1)));
+					Automaton c = Automaton.union(la1);
+					c.setMaxStatesLimit(Integer.MAX_VALUE);
+					la2.add(Automaton.minimize(c));
 					la1.clear();
 				}
 			}
 			la2.add(Automaton.union(la1));
-			Automaton a = Automaton.minimize(Automaton.union(la2));
+			Automaton d = Automaton.union(la2);
+			d.setMaxStatesLimit(Integer.MAX_VALUE);
+			Automaton a = Automaton.minimize(d);
 			put(automata, me.getKey(), a);
 			assigned.add(a);
 		}
-		Automaton cn = Automaton.minimize(automata.get("Char").clone().intersection(Automaton.union(assigned).complement()));
+		Automaton e = Automaton.union(assigned);
+		e.setMaxStatesLimit(Integer.MAX_VALUE);
+		Automaton cn = Automaton.minimize(automata.get("Char").clone().intersection(e.complement()));
 		put(automata, "Cn", cn);
 		put(automata, "C", automata.get("C").clone().union(cn));
 	}
@@ -857,14 +865,14 @@ final public class Datatypes {
 		Map<String,Automaton> map = new HashMap<String,Automaton>();
 		int i = 0;
 		while (i + 1 < exps.length) 
-			put(map, exps[i++], new RegExp(exps[i++]).toAutomaton(map));
+			put(map, exps[i++], new RegExp(exps[i++]).toAutomaton(map).get());
 		return map;
 	}
 	
 	private static void putWith(String[] exps, Map<String,Automaton> use) {
 		int i = 0;
 		while (i + 1 < exps.length)  
-			put(automata, exps[i++], new RegExp(exps[i++]).toAutomaton(use));	
+			put(automata, exps[i++], new RegExp(exps[i++]).toAutomaton(use).get());
 	}
 	
 	private static void putFrom(String name, Map<String,Automaton> from) {

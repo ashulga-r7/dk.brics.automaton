@@ -1,7 +1,7 @@
 /*
  * dk.brics.automaton
  * 
- * Copyright (c) 2001-2017 Anders Moeller
+ * Copyright (c) 2001-2011 Anders Moeller
  * All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
@@ -29,11 +29,9 @@
 
 package dk.brics.automaton;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.Set;
+import dk.brics.exception.RegexStatesExceededException;
+
+import java.util.*;
 
 /**
  * Construction of basic automata.
@@ -47,7 +45,8 @@ final public class BasicAutomata {
 	 */
 	public static Automaton makeEmpty() {
 		Automaton a = new Automaton();
-		a.initial = new State();
+		State s = new State();
+		a.initial = s;
 		a.deterministic = true;
 		return a;
 	}
@@ -208,13 +207,13 @@ final public class BasicAutomata {
 	 * decimal non-negative integers in the given interval.
 	 * @param min minimal value of interval
 	 * @param max maximal value of inverval (both end points are included in the interval)
-	 * @param digits if &gt;0, use fixed number of digits (strings must be prefixed
+	 * @param digits if >0, use fixed number of digits (strings must be prefixed 
 	 *               by 0's to obtain the right length) -
 	 *               otherwise, the number of digits is not fixed
-	 * @exception IllegalArgumentException if min&gt;max or if numbers in the interval cannot be expressed
+	 * @exception IllegalArgumentException if min>max or if numbers in the interval cannot be expressed
 	 *                                     with the given fixed number of digits
 	 */
-	public static Automaton makeInterval(int min, int max, int digits) throws IllegalArgumentException {
+	public static Optional<Automaton> makeInterval(int min, int max, int digits) throws IllegalArgumentException {
 		Automaton a = new Automaton();
 		String x = Integer.toString(min);
 		String y = Integer.toString(max);
@@ -248,7 +247,7 @@ final public class BasicAutomata {
 		} else
 			a.deterministic = true;
 		a.checkMinimizeAlways();
-		return a;
+		return Optional.of(a);
 	}
 	
 	/** 
@@ -267,16 +266,16 @@ final public class BasicAutomata {
      * so the input array is modified. 
      * @see StringUnionOperations
      */
-    public static Automaton makeStringUnion(CharSequence... strings) {
+    public static Optional<Automaton> makeStringUnion(CharSequence... strings) {
         if (strings.length == 0)
-            return makeEmpty();
+            return Optional.of(makeEmpty());
         Arrays.sort(strings, StringUnionOperations.LEXICOGRAPHIC_ORDER);
         Automaton a = new Automaton();
         a.setInitialState(StringUnionOperations.build(strings));
         a.setDeterministic(true);
         a.reduce();
         a.recomputeHashCode();
-        return a;
+        return Optional.of(a);
     }
 
 	/**
@@ -284,17 +283,27 @@ final public class BasicAutomata {
 	 * that are not larger than the given value.
 	 * @param n string representation of maximum value
 	 */
-	public static Automaton makeMaxInteger(String n) {
+	public static Optional<Automaton> makeMaxInteger(String n) {
 		int i = 0;
 		while (i < n.length() && n.charAt(i) == '0')
 			i++;
 		StringBuilder b = new StringBuilder();
 		b.append("0*(0|");
 		if (i < n.length())
-			b.append("[0-9]{1,").append(n.length() - i - 1).append("}|");
+			b.append("[0-9]{1," + (n.length() - i - 1) + "}|");
 		maxInteger(n.substring(i), 0, b);
 		b.append(")");
-		return Automaton.minimize((new RegExp(b.toString())).toAutomaton());
+		Optional<Automaton> automaton = new RegExp(b.toString()).toAutomaton();
+		if (!automaton.isPresent()) {
+			return Optional.empty();
+		}
+		Automaton a;
+		try {
+			a = Automaton.minimize(automaton.get());
+		} catch (RegexStatesExceededException e) {
+			return Optional.empty();
+		}
+		return Optional.of(a);
 	}
 
 	private static void maxInteger(String n, int i, StringBuilder b) {
@@ -302,7 +311,7 @@ final public class BasicAutomata {
 		if (i < n.length()) {
 			char c = n.charAt(i);
 			if (c != '0')
-				b.append("[0-").append((char) (c - 1)).append("][0-9]{").append(n.length() - i - 1).append("}|");
+				b.append("[0-" + (char)(c-1) + "][0-9]{" + (n.length() - i - 1) + "}|");
 			b.append(c);
 			maxInteger(n, i + 1, b);
 		}
@@ -314,7 +323,7 @@ final public class BasicAutomata {
 	 * that are not less that the given value.
 	 * @param n string representation of minimum value
 	 */
-	public static Automaton makeMinInteger(String n) {
+	public static Optional<Automaton> makeMinInteger(String n) {
 		int i = 0;
 		while (i + 1 < n.length() && n.charAt(i) == '0')
 			i++;
@@ -322,7 +331,17 @@ final public class BasicAutomata {
 		b.append("0*");
 		minInteger(n.substring(i), 0, b);
 		b.append("[0-9]*");
-		return Automaton.minimize((new RegExp(b.toString())).toAutomaton());
+		Optional<Automaton> automaton = new RegExp(b.toString()).toAutomaton();
+		if (!automaton.isPresent()) {
+			return Optional.empty();
+		}
+		Automaton a;
+		try {
+			a = Automaton.minimize(automaton.get());
+		} catch (RegexStatesExceededException e) {
+			return Optional.empty();
+		}
+		return Optional.of(a);
 	}
 	
 	private static void minInteger(String n, int i, StringBuilder b) {
@@ -330,7 +349,7 @@ final public class BasicAutomata {
 		if (i < n.length()) {
 			char c = n.charAt(i);
 			if (c != '9')
-				b.append("[").append((char) (c + 1)).append("-9][0-9]{").append(n.length() - i - 1).append("}|");
+				b.append("[" + (char)(c+1) + "-9][0-9]{" + (n.length() - i - 1) + "}|");
 			b.append(c);
 			minInteger(n, i + 1, b);
 		}
@@ -343,8 +362,18 @@ final public class BasicAutomata {
 	 * Surrounding whitespace is permitted.
 	 * @param i max number of necessary digits
 	 */
-	public static Automaton makeTotalDigits(int i) {
-		return Automaton.minimize((new RegExp("[ \t\n\r]*[-+]?0*([0-9]{0," + i + "}|((([0-9]\\.*){0," + i + "})&@\\.@)0*)[ \t\n\r]*")).toAutomaton());
+	public static Optional<Automaton> makeTotalDigits(int i) {
+		Optional<Automaton> automaton = new RegExp("[ \t\n\r]*[-+]?0*([0-9]{0," + i + "}|((([0-9]\\.*){0," + i + "})&@\\.@)0*)[ \t\n\r]*").toAutomaton();
+		if (!automaton.isPresent()) {
+			return Optional.empty();
+		}
+		Automaton a;
+		try {
+			a = Automaton.minimize(automaton.get());
+		} catch (RegexStatesExceededException e) {
+			return Optional.empty();
+		}
+		return Optional.of(a);
 	}
 	
 	/**
@@ -353,8 +382,18 @@ final public class BasicAutomata {
 	 * Surrounding whitespace is permitted.
 	 * @param i max number of necessary fraction digits
 	 */
-	public static Automaton makeFractionDigits(int i) {
-		return Automaton.minimize((new RegExp("[ \t\n\r]*[-+]?[0-9]+(\\.[0-9]{0," + i + "}0*)?[ \t\n\r]*")).toAutomaton());
+	public static Optional<Automaton> makeFractionDigits(int i) {
+		Optional<Automaton> automaton = new RegExp("[ \t\n\r]*[-+]?[0-9]+(\\.[0-9]{0," + i + "}0*)?[ \t\n\r]*").toAutomaton();
+		if (!automaton.isPresent()) {
+			return Optional.empty();
+		}
+		Automaton a;
+		try {
+			a = Automaton.minimize(automaton.get());
+		} catch (RegexStatesExceededException e) {
+			return Optional.empty();
+		}
+		return Optional.of(a);
 	}
 	
 	/**
@@ -362,7 +401,7 @@ final public class BasicAutomata {
 	 * Surrounding whitespace is permitted.
 	 * @param value string representation of integer
 	 */
-	public static Automaton makeIntegerValue(String value) {
+	public static Optional<Automaton> makeIntegerValue(String value) {
 		boolean minus = false;
     	int i = 0;
     	while (i < value.length()) {
@@ -383,7 +422,13 @@ final public class BasicAutomata {
 		else
 			s = Automaton.makeChar('+').optional();
 		Automaton ws = Datatypes.getWhitespaceAutomaton();
-		return Automaton.minimize(ws.concatenate(s.concatenate(Automaton.makeChar('0').repeat()).concatenate(Automaton.makeString(b.toString()))).concatenate(ws));		
+		Automaton a;
+		try {
+			a = Automaton.minimize(ws.concatenate(s.concatenate(Automaton.makeChar('0').repeat()).concatenate(Automaton.makeString(b.toString()))).concatenate(ws));
+		} catch (RegexStatesExceededException ex) {
+			return Optional.empty();
+		}
+		return Optional.of(a);
 	}
 	
 	/**
@@ -391,7 +436,7 @@ final public class BasicAutomata {
 	 * Surrounding whitespace is permitted.
 	 * @param value string representation of decimal number
 	 */
-	public static Automaton makeDecimalValue(String value) {
+	public static Optional<Automaton> makeDecimalValue(String value) {
 		boolean minus = false;
     	int i = 0;
     	while (i < value.length()) {
@@ -431,13 +476,19 @@ final public class BasicAutomata {
 		else
 			d = Automaton.makeChar('.').concatenate(Automaton.makeString(b2.toString())).concatenate(Automaton.makeChar('0').repeat());
 		Automaton ws = Datatypes.getWhitespaceAutomaton();
-		return Automaton.minimize(ws.concatenate(s.concatenate(Automaton.makeChar('0').repeat()).concatenate(Automaton.makeString(b1.toString())).concatenate(d)).concatenate(ws));
+		Automaton a;
+		try {
+			a = Automaton.minimize(ws.concatenate(s.concatenate(Automaton.makeChar('0').repeat()).concatenate(Automaton.makeString(b1.toString())).concatenate(d)).concatenate(ws));
+		} catch (RegexStatesExceededException ex) {
+			return Optional.empty();
+		}
+		return Optional.of(a);
 	}
 	
 	/**
 	 * Constructs deterministic automaton that matches strings that contain the given substring.
 	 */
-	public static Automaton makeStringMatcher(String s) {
+	public static Optional<Automaton> makeStringMatcher(String s) {
 		Automaton a = new Automaton();
 		State[] states = new State[s.length() + 1];
 		states[0] = a.initial;
@@ -482,6 +533,6 @@ final public class BasicAutomata {
 			}
 		}
 		a.deterministic = true;
-		return a;
+		return Optional.of(a);
 	}
 }
